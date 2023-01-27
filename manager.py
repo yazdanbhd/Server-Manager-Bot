@@ -45,6 +45,7 @@ def credentials(update, context):
     except Exception as e:
         update.message.reply_text("Error connecting to server: " + str(e))
 
+
 logging.basicConfig(filename="bot.log", level=logging.INFO)
 
 
@@ -64,6 +65,59 @@ def cmd(update, context):
         update.message.reply_text("Error executing command: " + str(e))
         logging.error(f"Error executing command: {command}. Error: {e}")
 
+
+# function to get a file from user and upload it to server
+def upload(update, context):
+    global state
+    if state != "CONNECTED":
+        update.message.reply_text("Please connect to a server first using the /start command.")
+        return
+    if not context.args:
+        update.message.reply_text("Please provide the local path for the file.")
+        state = "UPLOAD_LOCAL"
+        return
+    local_path = context.args[0]
+    if not os.path.exists(local_path):
+        update.message.reply_text("Invalid local path. Please provide a valid local path.")
+        return
+    if state == "UPLOAD_LOCAL":
+        update.message.reply_text("Please provide the remote path for the file.")
+        state = "UPLOAD_REMOTE"
+        return
+    remote_path = context.args[0]
+    try:
+        sftp = client.open_sftp()
+        sftp.put(local_path, remote_path)
+        sftp.close()
+        update.message.reply_text(f"File was uploaded successfully.")
+    except Exception as e:
+        update.message.reply_text("Error uploading file: " + str(e))
+
+
+# function to handle the /download command
+def download(update, context):
+    global state
+    if state != "CONNECTED":
+        update.message.reply_text("Please connect to a server first using the /start command.")
+        return
+    remote_path = context.args[0]
+    try:
+        sftp = client.open_sftp()
+        if sftp.stat(remote_path):
+            file_name = remote_path.split("/")[-1]
+            sftp.get(remote_path, file_name)
+            with open(file_name, 'rb') as f:
+                update.message.reply_document(document=f, filename=file_name)
+            os.remove(file_name)
+            logging.info(f"File {remote_path} was downloaded and sent to user successfully.")
+            sftp.close()
+        else:
+            update.message.reply_text("Error the path is incorrect")
+    except Exception as e:
+        update.message.reply_text("Error downloading and sending file: " + str(e))
+        logging.error(f"Error downloading and sending file: {remote_path}. Error: {e}")
+
+
 def stop(update, context):
     global state
     state = None
@@ -73,13 +127,15 @@ def stop(update, context):
 
 def help(update, context):
     update.message.reply_text(
-        "Available commands:\n/start - Connect to a server\n/cmd [command] - Execute command on the server\n\n/stop - Close the connection to the server\n/help - Display this message")
+        "Available commands:\n/start - Connect to a server\n/cmd [command] - Execute command on the server\n/upload [remote_path] - Upload a file to the server\n/download [remote_path] [local_path] - Download a file from the server\n/stop - Close the connection to the server\n/help - Display this message")
 
 
 # Create the Updater and pass it your bot's token.
 updater = Updater(TOKEN, use_context=True)
 updater.dispatcher.add_handler(CommandHandler("start", start))
 updater.dispatcher.add_handler(CommandHandler("cmd", cmd))
+updater.dispatcher.add_handler(CommandHandler("upload", upload))
+updater.dispatcher.add_handler(CommandHandler("download", download))
 updater.dispatcher.add_handler(CommandHandler("stop", stop))
 updater.dispatcher.add_handler(CommandHandler("help", help))
 updater.dispatcher.add_handler(MessageHandler(Filters.text, credentials))
