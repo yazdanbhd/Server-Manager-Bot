@@ -5,7 +5,7 @@ import logging
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
 # Replace with your own Telegram bot token
-TOKEN = "YOUR_TOKEN"
+TOKEN = os.environ['Token']
 
 # Initialize the SSH client
 client = paramiko.SSHClient()
